@@ -1,46 +1,38 @@
 package com.example.practica4.viewmodel
 
-import android.app.Activity
 import android.app.Application
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.Manifest
-import android.app.AlertDialog
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.practica4.data.BluetoothRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.IOException
-import java.nio.charset.Charset
 import java.util.UUID
 
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
+    private val bluetoothRepository = BluetoothRepository(getApplication())
+    private val selectedDeviceName = mutableStateOf<String?>(null)
+    private val selectedDevice = mutableStateOf<String?>(null)
+    private val _temperature = MutableStateFlow("--")
 
     // Estados existentes
-    val devices = mutableStateListOf<String>()
     val pairedDevices = mutableStateListOf<String>()
-    val selectedDeviceName = mutableStateOf<String?>(null)
     val selectedDeviceAddress = mutableStateOf<String?>(null)
-    val selectedDevice = mutableStateOf<String?>(null)
     val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
-    private val _temperature = MutableStateFlow("--")
     val temperature: StateFlow<String> = _temperature.asStateFlow()
 
     //private val _receivedMessages = MutableStateFlow<List<String>>(emptyList())
@@ -48,7 +40,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _receivedMessages = mutableStateOf("--") // Valor inicial
     val receivedMessages: State<String> = _receivedMessages
-
 
     private var readThread: Thread? = null
 
@@ -59,9 +50,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private var bluetoothSocket: BluetoothSocket? = null
 
     sealed class ConnectionState {
-        object Disconnected : ConnectionState()
-        object Connecting : ConnectionState()
-        object Connected : ConnectionState()
+        data object Disconnected : ConnectionState()
+        data object Connecting : ConnectionState()
+        data object Connected : ConnectionState()
         data class Error(val message: String) : ConnectionState()
     }
 
@@ -83,18 +74,18 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }.apply { start() }
     }
 
-    fun updateMessage(newMessage: String) {
+    private fun updateMessage(newMessage: String) {
         _receivedMessages.value = newMessage
     }
 
     // Función para conectar a un dispositivo por dirección MAC
     fun connectToDeviceByMac(context: Context, macAddress: String) {
-        if (!hasBluetoothPermissions(context)) {
+        if (!bluetoothRepository.hasBluetoothPermissions(context)) {
             connectionState.value = ConnectionState.Error("Permisos de Bluetooth no concedidos")
             return
         }
 
-        val bluetoothAdapter = getBluetoothAdapter(context) ?: run {
+        val bluetoothAdapter = bluetoothRepository.getBluetoothAdapter(context) ?: run {
             connectionState.value = ConnectionState.Error("Bluetooth no disponible")
             return
         }
@@ -186,121 +177,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
-        val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
-        return bluetoothManager?.adapter
-    }
 
-    private fun checkPermission(
-        context: Context,
-        connectPermissionLauncher: ActivityResultLauncher<String>? = null
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                connectPermissionLauncher?.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                return
-            }
-        }
-    }
-
-    fun loadPairedDevices(context: Context) {
-        pairedDevices.clear()
-        checkPermission(context)
-        val bluetoothAdapter = getBluetoothAdapter(context)
-        bluetoothAdapter?.bondedDevices?.forEach { device ->
-            pairedDevices.add("${device.name ?: "Dispositivo desconocido"} - ${device.address}")
-        }
-    }
-
-    private fun hasBluetoothPermissions(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    fun startBluetoothScan(
-        context: Context,
-        connectPermissionLauncher: ActivityResultLauncher<String>
-    ) {
-        checkPermission(context)
-        devices.clear()
-        val bluetoothAdapter = getBluetoothAdapter(context)
-        val scanner = bluetoothAdapter?.bluetoothLeScanner
-        val scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                checkPermission(context, connectPermissionLauncher)
-
-                val deviceName = result.device.name ?: "Dispositivo desconocido"
-                val deviceAddress = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-                        result.device.address
-                    } else {
-                        "Dirección no disponible"
-                    }
-                } else {
-                    result.device.address
-                }
-
-                val deviceInfo = "$deviceName - $deviceAddress"
-                if (!devices.contains(deviceInfo)) {
-                    devices.add(deviceInfo)
-                }
-            }
-        }
-
-        scanner?.startScan(scanCallback)
-    }
-
-    fun checkPermissionButton(
-        context: Context,
-        activity: Activity,
-        scanPermissionLauncher: ActivityResultLauncher<String>,
-        connectPermissionLauncher: ActivityResultLauncher<String>
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (hasBluetoothPermissions(context)) {
-                loadPairedDevices(context)
-                startBluetoothScan(context, connectPermissionLauncher)
-            } else {
-                requestBluetoothPermissions(activity, scanPermissionLauncher, connectPermissionLauncher)
-            }
-        }
-    }
-
-    private fun requestBluetoothPermissions(
-        activity: Activity,
-        scanPermissionLauncher: ActivityResultLauncher<String>,
-        connectPermissionLauncher: ActivityResultLauncher<String>
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_SCAN)) {
-                AlertDialog.Builder(activity)
-                    .setTitle("Permisos necesarios")
-                    .setMessage("La aplicación necesita permisos de Bluetooth para escanear y conectar dispositivos")
-                    .setPositiveButton("Entendido") { _, _ ->
-                        scanPermissionLauncher.launch(Manifest.permission.BLUETOOTH_SCAN)
-                        connectPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                    }
-                    .show()
-            } else {
-                scanPermissionLauncher.launch(Manifest.permission.BLUETOOTH_SCAN)
-                connectPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-        } else {
-            ActivityCompat.requestPermissions(
-                activity,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                BLUETOOTH_PERMISSION_REQUEST_CODE
-            )
-        }
-    }
 
     fun sendCommand(command: String, onResponse: (String) -> Unit = {}, context: Context) {
         try {
@@ -355,14 +232,16 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    companion object {
-        private const val BLUETOOTH_PERMISSION_REQUEST_CODE = 100
-    }
 
     override fun onCleared() {
         super.onCleared()
         disconnect()
     }
 
+    fun syncPairedDevices(context: Context) {
+        bluetoothRepository.loadPairedDevices(context)
+        pairedDevices.clear()
+        pairedDevices.addAll(bluetoothRepository.pairedDevices)
+    }
 
 }

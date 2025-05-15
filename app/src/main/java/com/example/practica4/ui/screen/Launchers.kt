@@ -5,18 +5,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
-import com.example.practica4.viewmodel.BluetoothViewModel
+import androidx.compose.runtime.remember
+import com.example.practica4.data.BluetoothRepository
 
 @Composable
 fun rememberBluetoothPermissionLauncher(
-    viewModel: BluetoothViewModel,
     context: Context
 ): ActivityResultLauncher<String> {
+    val bluetoothRepository = remember { BluetoothRepository(context) }
     return rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.loadPairedDevices(context)
+            bluetoothRepository.loadPairedDevices(context)
         }
     }
 
@@ -24,15 +25,15 @@ fun rememberBluetoothPermissionLauncher(
 
 @Composable
 fun scanBluetoothPermissionLauncher(
-    viewModel: BluetoothViewModel,
     context: Context,
     connectPermissionLauncher: ActivityResultLauncher<String>
 ): ActivityResultLauncher<String> {
+    val bluetoothRepository = remember { BluetoothRepository(context) }
     return rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.startBluetoothScan(
+            bluetoothRepository.startBluetoothScan(
                 context = context,
                 connectPermissionLauncher = connectPermissionLauncher)
         }

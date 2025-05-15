@@ -3,10 +3,8 @@ package com.example.practica4.ui.screen
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,10 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.practica4.R
+import com.example.practica4.data.BluetoothRepository
 import com.example.practica4.viewmodel.AppViewModel
 import com.example.practica4.viewmodel.BluetoothViewModel
 
@@ -53,9 +49,10 @@ fun BluetoothScreenContent(modifier: Modifier = Modifier) {
     val bluetoothViewModel : BluetoothViewModel = viewModel()
     val connectionState by bluetoothViewModel.connectionState.collectAsState()
     val context = LocalContext.current
+    val bluetoothRepository = remember { BluetoothRepository(context) }
     val activity = LocalContext.current as Activity
-    val connectPermissionLauncher = rememberBluetoothPermissionLauncher(bluetoothViewModel, context)
-    val scanPermissionLauncher = scanBluetoothPermissionLauncher(bluetoothViewModel, context, connectPermissionLauncher)
+    val connectPermissionLauncher = rememberBluetoothPermissionLauncher(context)
+    val scanPermissionLauncher = scanBluetoothPermissionLauncher(context, connectPermissionLauncher)
     val showDevicesDialog = remember { mutableStateOf(false) }
     val temperature by bluetoothViewModel.temperature.collectAsState()
     val receivedMessages by bluetoothViewModel.receivedMessages
@@ -69,8 +66,8 @@ fun BluetoothScreenContent(modifier: Modifier = Modifier) {
     ){
         Button(
             onClick = {
-                bluetoothViewModel.checkPermissionButton(context, activity, scanPermissionLauncher, connectPermissionLauncher)
-                bluetoothViewModel.loadPairedDevices(context)
+                bluetoothRepository.checkPermissionButton(context, activity, scanPermissionLauncher, connectPermissionLauncher)
+                bluetoothViewModel.syncPairedDevices(context)
                 showDevicesDialog.value = true
                       },
             modifier = Modifier.fillMaxWidth(),
@@ -240,49 +237,5 @@ fun BluetoothScreenContent(modifier: Modifier = Modifier) {
                 }
             )
         }
-    }
-}
-
-@Composable
-private fun BluetoothConnectionStatusIndicator(connectionState: BluetoothViewModel.ConnectionState) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(text = "Estado:")
-        Spacer(modifier = Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(16.dp)
-                .background(
-                    color = when (connectionState) {
-                        is BluetoothViewModel.ConnectionState.Disconnected -> Color.Gray
-                        is BluetoothViewModel.ConnectionState.Connecting -> Color.Yellow
-                        is BluetoothViewModel.ConnectionState.Connected -> Color.Green
-                        is BluetoothViewModel.ConnectionState.Error -> Color.Red
-                    },
-                    shape = CircleShape
-                )
-        )
-    }
-}
-
-@Composable
-fun RoundButton(
-    text: String,
-    onClick: () -> Unit,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .size(100.dp)
-            .background(color, CircleShape)
-            .clickable(onClick = onClick)
-    ) {
-        Text(
-            text = text,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
-        )
     }
 }
