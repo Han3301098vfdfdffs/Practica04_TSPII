@@ -12,7 +12,7 @@ import com.example.practica4.data.BluetoothRepository
 fun rememberBluetoothPermissionLauncher(
     context: Context
 ): ActivityResultLauncher<String> {
-    val bluetoothRepository = remember { BluetoothRepository(context) }
+    val bluetoothRepository = remember { BluetoothRepository() }
     return rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -28,7 +28,7 @@ fun scanBluetoothPermissionLauncher(
     context: Context,
     connectPermissionLauncher: ActivityResultLauncher<String>
 ): ActivityResultLauncher<String> {
-    val bluetoothRepository = remember { BluetoothRepository(context) }
+    val bluetoothRepository = remember { BluetoothRepository() }
     return rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
