@@ -26,10 +26,6 @@ class BluetoothRepository {
     private var bluetoothSocket: BluetoothSocket? = null
     private val sppUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
-    companion object {
-        private const val BLUETOOTH_PERMISSION_REQUEST_CODE = 100
-    }
-
     private fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
         val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
         return bluetoothManager?.adapter
@@ -57,34 +53,6 @@ class BluetoothRepository {
                 connectPermissionLauncher?.launch(Manifest.permission.BLUETOOTH_CONNECT)
                 return
             }
-        }
-    }
-
-    private fun requestBluetoothPermissions(
-        activity: Activity,
-        scanPermissionLauncher: ActivityResultLauncher<String>,
-        connectPermissionLauncher: ActivityResultLauncher<String>
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_SCAN)) {
-                AlertDialog.Builder(activity)
-                    .setTitle("Permisos necesarios")
-                    .setMessage("La aplicación necesita permisos de Bluetooth para escanear y conectar dispositivos")
-                    .setPositiveButton("Entendido") { _, _ ->
-                        scanPermissionLauncher.launch(Manifest.permission.BLUETOOTH_SCAN)
-                        connectPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                    }
-                    .show()
-            } else {
-                scanPermissionLauncher.launch(Manifest.permission.BLUETOOTH_SCAN)
-                connectPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-        } else {
-            ActivityCompat.requestPermissions(
-                activity,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                BLUETOOTH_PERMISSION_REQUEST_CODE
-            )
         }
     }
 
@@ -129,22 +97,6 @@ class BluetoothRepository {
         }
 
         scanner?.startScan(scanCallback)
-    }
-
-    fun checkPermissionButton(
-        context: Context,
-        activity: Activity,
-        scanPermissionLauncher: ActivityResultLauncher<String>,
-        connectPermissionLauncher: ActivityResultLauncher<String>
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (hasBluetoothPermissions(context)) {
-                loadPairedDevices(context)
-                startBluetoothScan(context, connectPermissionLauncher)
-            } else {
-                requestBluetoothPermissions(activity, scanPermissionLauncher, connectPermissionLauncher)
-            }
-        }
     }
 
     fun connectToDeviceByMac(context: Context, macAddress: String): BluetoothSocket {
@@ -245,5 +197,4 @@ class BluetoothRepository {
             )
         }
     }
-
 }
