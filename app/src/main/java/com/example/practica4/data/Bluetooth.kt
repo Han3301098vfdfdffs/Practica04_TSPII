@@ -95,7 +95,6 @@ class BluetoothRepository {
                 }
             }
         }
-
         scanner?.startScan(scanCallback)
     }
 
@@ -137,32 +136,12 @@ class BluetoothRepository {
         bluetoothSocket = null
     }
 
-    fun sendCommand(command: String, onResponse: (String) -> Unit) {
+    fun sendCommand(command: String) {
         bluetoothSocket?.let { socket ->
             Thread {
                 try {
                     socket.outputStream.write(command.toByteArray())
                     socket.outputStream.flush()
-
-                    val startTime = System.currentTimeMillis()
-                    val buffer = ByteArray(1024)
-                    var response = ""
-
-                    while (System.currentTimeMillis() - startTime < 2000) {
-                        if (socket.inputStream.available() > 0) {
-                            val bytesRead = socket.inputStream.read(buffer)
-                            response += String(buffer, 0, bytesRead)
-                            if (response.contains('\n')) break
-                        }
-                        Thread.sleep(50)
-                    }
-
-                    if (response.isNotEmpty()) {
-                        onResponse(response.trim())
-                    } else {
-                        Log.w("BluetoothRepository", "No hubo respuesta del Arduino")
-                    }
-
                 } catch (e: IOException) {
                     Log.e("BluetoothRepository", "Error al enviar comando: ${e.message}")
                 }

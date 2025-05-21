@@ -1,5 +1,6 @@
 package com.example.practica4.viewmodel
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.content.Context
@@ -15,11 +16,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.practica4.data.BluetoothRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.io.IOException
 
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
+    private var context: Context = application.applicationContext
 
     private val bluetoothRepository = BluetoothRepository()
     private val selectedDeviceName = mutableStateOf<String?>(null)
@@ -28,6 +32,10 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     val pairedDevices = mutableStateListOf<String>()
     val selectedDeviceAddress = mutableStateOf<String?>(null)
     val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+
+    private var lastCommandSent: String? = null
+    private var commandTimeoutJob: Job? = null
+    private val COMMAND_TIMEOUT = 3000L // 3 segundos para timeout
 
     private val _receivedMessages = mutableStateOf("--") // Valor inicial
     val receivedMessages: State<String> = _receivedMessages
@@ -44,22 +52,52 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun startReadingThread(socket: BluetoothSocket) {
         readThread = Thread {
+            Log.i("Bluetooth", "Se inició la lectura del socket Bluetooth")
             try {
                 val reader = socket.inputStream.bufferedReader()
                 while (!Thread.interrupted()) {
-                    val line = reader.readLine()?.trim()
-                    if (!line.isNullOrEmpty()) {
-                        viewModelScope.launch {
-                            updateMessage(line) // Actualiza el estado aquí
+                    try {
+                        val line = reader.readLine()?.trim()
+                        if (!line.isNullOrEmpty()) {
+                            viewModelScope.launch {
+                                when (line) {
+                                    "LED ON" -> {
+                                        Log.i("Bluetooth", "Se encendió el LED")
+                                        showToast("LED encendido correctamente")
+                                        lastCommandSent = null // Resetear el comando pendiente
+                                        commandTimeoutJob?.cancel()
+                                    }
+                                    "LED OFF" -> {
+                                        Log.i("Bluetooth", "Se apagó el LED")
+                                        showToast("LED apagado correctamente")
+                                        lastCommandSent = null // Resetear el comando pendiente
+                                        commandTimeoutJob?.cancel()
+                                    }
+                                    else -> {
+                                        updateMessage(line)
+                                    }
+                                }
+                            }
                         }
+                    } catch (e: IOException) {
+                        Log.e("Bluetooth", "Error leyendo mensaje: ${e.message}")
+                        showToast("Error: No se están recibiendo datos")
+                        break
                     }
                 }
+                Log.i("Bluetooth", "Lectura interrumpida manualmente")
             } catch (e: IOException) {
-                Log.e("Bluetooth", "Error: ${e.message}")
+                Log.e("Bluetooth", "Error durante la lectura: ${e.message}")
+                showToast("Error: Conexión interrumpida")
             }
         }.apply { start() }
     }
 
+    private fun showToast(message: String) {
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
     fun connectToDeviceByMac(context: Context, macAddress: String) {
         connectionState.value = ConnectionState.Connecting
 
@@ -74,9 +112,12 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: IllegalArgumentException) {
                 connectionState.value = ConnectionState.Error("Dirección MAC inválida")
             } catch (e: IOException) {
-                connectionState.value = ConnectionState.Error("Error de conexión: ${e.message}")
+                val errorMsg = "Error de conexión: ${e.message}"
+                showToast(errorMsg)
+                connectionState.value = ConnectionState.Error(errorMsg)
             } catch (e: Exception) {
                 connectionState.value = ConnectionState.Error("Error inesperado: ${e.message}")
+                showToast("Error Inesperado")
             }
         }
     }
@@ -101,14 +142,42 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun sendCommand(command: String, context: Context) {
-        bluetoothRepository.sendCommand(command) { response ->
-            viewModelScope.launch(Dispatchers.Main) {
-                _receivedMessages.value = response
-                Toast.makeText(context, "Arduino dice: $response", Toast.LENGTH_SHORT).show()
+
+    fun sendCommand(command: String) {
+        try {
+            if (connectionState.value !is ConnectionState.Connected) {
+                showToast("Error: No hay conexión Bluetooth")
+                return
             }
+
+            lastCommandSent = command
+            bluetoothRepository.sendCommand(command)
+            Log.i("BluetoothViewModel", "Comando enviado correctamente: \"$command\"")
+            showToast("Comando enviado correctamente: \"$command\"")
+
+            // Configurar timeout para verificar confirmación
+            commandTimeoutJob = viewModelScope.launch {
+                delay(COMMAND_TIMEOUT)
+                if (lastCommandSent == command) {
+                    when (command) {
+                        "A" -> showToast("Error: No se confirmó el encendido del LED")
+                        "B" -> showToast("Error: No se confirmó el apagado del LED")
+                        else -> showToast("Error: No se recibió confirmación")
+                    }
+                    lastCommandSent = null
+                }
+            }
+
+        } catch (e: IOException) {
+            Log.e("BluetoothViewModel", "Error enviando comando: ${e.message}")
+            showToast("Error: No se pudo enviar el comando")
+            connectionState.value = ConnectionState.Error("Error de comunicación")
+        } catch (e: Exception) {
+            Log.e("BluetoothViewModel", "Error inesperado: ${e.message}")
+            showToast("Error inesperado al enviar comando")
         }
     }
+
 
     override fun onCleared() {
         super.onCleared()
