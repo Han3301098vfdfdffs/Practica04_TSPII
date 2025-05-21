@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +47,19 @@ fun BluetoothScreenContent(modifier: Modifier = Modifier) {
     val showDevicesDialog = remember { mutableStateOf(false) }
     val receivedMessages by bluetoothViewModel.receivedMessages
     var isSwitchOn by remember { mutableStateOf(false) }
+
+    LaunchedEffect(connectionState) {
+        when (connectionState) {
+            is BluetoothViewModel.ConnectionState.Connected -> {
+                Toast.makeText(context, "Conectado", Toast.LENGTH_SHORT).show()
+            }
+            is BluetoothViewModel.ConnectionState.Error -> {
+                val errorState = connectionState as BluetoothViewModel.ConnectionState.Error
+                Toast.makeText(context, errorState.message, Toast.LENGTH_SHORT).show()
+            }
+            else -> {}
+        }
+    }
 
     Column (
         modifier = modifier
@@ -113,19 +128,19 @@ fun BluetoothScreenContent(modifier: Modifier = Modifier) {
             isTempOn = isSwitchOn,
             onLedOn = {
                 if (connectionState is BluetoothViewModel.ConnectionState.Connected) {
-                    bluetoothViewModel.sendCommand("A", context = context)
+                    bluetoothViewModel.sendCommand("A")
                 }
             },
             onLedOff = {
                 if (connectionState is BluetoothViewModel.ConnectionState.Connected) {
-                    bluetoothViewModel.sendCommand("B", context = context)
+                    bluetoothViewModel.sendCommand("B")
                 }
             },
             onTempToggle = { newState ->
                 isSwitchOn = newState
                 if (connectionState is BluetoothViewModel.ConnectionState.Connected) {
                     val command = if (newState) "C" else "D"
-                    bluetoothViewModel.sendCommand(command, context = context)
+                    bluetoothViewModel.sendCommand(command)
                 }
             }
         )
